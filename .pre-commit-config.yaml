@@ -8,35 +8,19 @@ repos:
     -   id: check-merge-conflict
     -   id: check-json
     -   id: requirements-txt-fixer
-    -   id: fix-encoding-pragma
 -   repo: https://github.com/psf/black
     rev: 22.3.0
     hooks:
     -   id: black
--   repo: https://github.com/pycqa/isort
-    rev: 5.10.1
-    hooks:
-      - id: isort
-        args: ["--profile", "black"]
 -   repo: https://github.com/pre-commit/mirrors-mypy
     rev: v0.790
     hooks:
     -   id: mypy
--   repo: https://github.com/asottile/pyupgrade
-    rev: v2.31.0
-    hooks:
-      - id: pyupgrade
-        args: ["--py37-plus"]
-
 -   repo: https://github.com/asottile/reorder_python_imports
     rev: v2.7.1
     hooks:
       - id: reorder-python-imports
         args: [--py37-plus, --add-import, 'from __future__ import annotations']
--   repo: https://github.com/asottile/setup-cfg-fmt
-    rev: v1.20.0
-    hooks:
-      - id: setup-cfg-fmt
 -   repo: local
     hooks:
       - id: pylint

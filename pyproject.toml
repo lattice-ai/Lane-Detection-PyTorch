@@ -10,6 +10,8 @@ disable = [
     "too-many-arguments",
     "too-few-public-methods",
     "no-else-return",
+    "duplicate-code",
+    "too-many-branches",
     "redefined-builtin",
     "dangerous-default-value",
 ]
