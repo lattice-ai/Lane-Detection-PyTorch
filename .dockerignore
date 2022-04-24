@@ -8,7 +8,7 @@
 .mypy_cache/
 
 data/
-models/
+checkpoints/
 notebooks/
 
 **/.DS_Store
