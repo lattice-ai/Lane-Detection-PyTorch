@@ -9,14 +9,15 @@ https://github.com/cfzd/Ultra-Fast-Lane-Detection/blob/master/model/model.py
 """
 from __future__ import annotations
 
-from typing import Any
-from typing import Iterable
+import os
+from typing import Dict
 from typing import Tuple
 
 import numpy as np
 import torch
 from rich.progress import track
 
+from src.io.dataloader import tusimple_train_dataloader
 from src.models.backbones import ResNet
 from src.nn.loss import LaneShapeLoss
 from src.nn.loss import LaneSimilarityLoss
@@ -26,6 +27,8 @@ from src.nn.metrics import IoU
 from src.nn.metrics import MultiLabelAcc
 from src.nn.metrics import reset_metrics
 from src.nn.metrics import update_metrics
+
+NUM_ROW_ANCHORS = 56
 
 
 class ConvBlock(torch.nn.Module):
@@ -236,217 +239,283 @@ class StructureAwareModel(torch.nn.Module):
         return group_cls
 
 
-def structure_aware_model_inference(model, batch: tuple, use_aux: bool) -> dict:
-    """
-    Custom Inference Function for the Structure Aware Model
+class StructureAwareTrainer:
+    """Custom Trainer Class for the StructureAwareModel
 
-    This function returns a custom dictionary used for calculating metrics based on the
-    condition if the auxiliary head will be used
-
-    :param model: An Instance of the StructureAwareModel
-    :type model: torch.nn.Module
-    :param batch: batch of data from the TUSimple dataloader
-    :type batch: Tuple
-    :param use_aux: Whether to use the Auxiliary Head or not
-    :type use_aux: bool
-    :return: dictionary object based on the use_aux parameter
-    :rtype: Dict
+    Utility Class to train a model as per:
+    'Ultra Fast Structure-aware Deep Lane Detection'
+    by Zequn Qin, Huanyu Wang, and Xi Li.
     """
-    # If Segmentation Head is being used
-    if use_aux:
-        img, classification_label, segmentation_label = batch
-        # Convert to torch Tensors
-        img, classification_label, segmentation_label = (
-            img.cuda(),
-            classification_label.long().cuda(),
-            segmentation_label.long().cuda(),
+
+    def __init__(
+        self,
+        epochs: int,
+        data_root: str,
+        use_pretrained: bool,
+        backbone: str,
+        griding_num: int,
+        num_lanes: int,
+        use_aux: bool,
+        learning_rate: float,
+        weight_decay: float,
+        batch_size: int,
+        sim_loss_w: float = 1.0,
+        shp_loss_w: float = 0.0,
+    ) -> None:
+        self.epochs = epochs
+        self.data_root = data_root
+        self.batch_size = batch_size
+        self.griding_num = griding_num
+        self.num_lanes = num_lanes
+        self.use_aux = use_aux
+        self.learning_rate = learning_rate
+        self.weight_decay = weight_decay
+
+        self.sim_loss_w = sim_loss_w
+        self.shp_loss_w = shp_loss_w
+
+        # Get Metric Dict
+        self.metric_dict: Dict = {}
+        self.get_metric_dict()
+
+        # Get Loss Dict
+        self.loss_dict: Dict = {}
+        self.get_loss_dict()
+
+        # Get Dataloader
+        self.train_loader = tusimple_train_dataloader(
+            batch_size=self.batch_size,
+            data_root=self.data_root,
+            griding_num=self.griding_num,
+            use_aux=self.use_aux,
+            num_lanes=self.num_lanes,
         )
 
-        classification_output, segmentation_output = model(img)
+        # Instantiate Model
+        self.model = StructureAwareModel(
+            pretrained=use_pretrained,
+            backbone=backbone,
+            cls_dim=(self.griding_num + 1, NUM_ROW_ANCHORS, self.num_lanes),
+            use_aux=self.use_aux,
+        ).cuda()
 
-        return {
-            "cls_out": classification_output,
-            "cls_label": classification_label,
-            "seg_out": segmentation_output,
-            "seg_label": segmentation_label,
-        }
-    # If only the Global Classification Head is being used
-    else:
-        img, classification_label = batch
-        # Convert to torch Tensors
-        img, classification_label = (img.cuda(), classification_label.long().cuda())
+        # Model Parameters
+        self.model_parameters = filter(
+            lambda p: p.requires_grad, self.model.parameters()
+        )
 
-        classification_output = model(img)
+        # Instantiate Optimizer
+        self.optimizer = torch.optim.Adam(
+            self.model_parameters, lr=self.learning_rate, weight_decay=self.weight_decay
+        )
 
-        return {"cls_out": classification_output}
+        # Instantiate Scheduler
+        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer=self.optimizer,
+            T_max=self.epochs * len(self.train_loader),  # type: ignore
+        )
 
+    def inference(self, batch) -> Dict:
+        """
+        inference Perform model inference on a single batch
 
-def structure_aware_loss_dict(args: Any) -> dict:
-    """
-    Creates a custom dictionary for the various loss functions used in
-    the training phase
+        :param batch: A batch of data from the dataloader
+        :return: Custom dictionary output
+        :rtype: Dict
+        """
+        # If Segmentation Head is being used
+        if self.use_aux:
+            img, classification_label, segmentation_label = batch
+            # Convert to torch Tensors
+            img, classification_label, segmentation_label = (
+                img.cuda(),
+                classification_label.long().cuda(),
+                segmentation_label.long().cuda(),
+            )
 
-    :param args: NameSpace
-    :type args: Any
-    :return: custom dictionary containing various loss functions
-    :rtype: Dict
-    """
+            classification_output, segmentation_output = self.model(img)
 
-    if args.use_aux:
-        loss_dict = {
-            "name": ["cls_loss", "relation_loss", "aux_loss", "relation_dis"],
-            "op": [
-                SoftmaxFocalLoss(2),
-                LaneSimilarityLoss(),
-                torch.nn.CrossEntropyLoss(),
-                LaneShapeLoss(),
-            ],
-            "weight": [1.0, args.sim_loss_w, 1.0, args.shp_loss_w],
-            "data_src": [
-                ("cls_out", "cls_label"),
-                ("cls_out",),
-                ("seg_out", "seg_label"),
-                ("cls_out",),
-            ],
-        }
-    else:
-        loss_dict = {
-            "name": ["cls_loss", "relation_loss", "relation_dis"],
-            "op": [SoftmaxFocalLoss(2), LaneSimilarityLoss(), LaneShapeLoss()],
-            "weight": [1.0, args.sim_loss_w, args.shp_loss_w],
-            "data_src": [("cls_out", "cls_label"), ("cls_out",), ("cls_out",)],
-        }
+            return {
+                "cls_out": classification_output,
+                "cls_label": classification_label,
+                "seg_out": segmentation_output,
+                "seg_label": segmentation_label,
+            }
+        # If only the Global Classification Head is being used
+        else:
+            img, classification_label = batch
+            # Convert to torch Tensors
+            img, classification_label = (img.cuda(), classification_label.long().cuda())
 
-    return loss_dict
+            classification_output = self.model(img)
 
+            return {"cls_out": classification_output}
 
-def structure_aware_metric_dict(args: Any) -> dict:
-    """
-    Creates a custom dictionary for the various metrics used in the training phase
+    def train_fn(self) -> Dict:
+        """
+        Train the Model for one epoch
 
-    :param args: NameSpace
-    :type args: Any
-    :return: custom dictionary containing various loss metrics
-    :rtype: Dict
-    """
+        :return: A dictionary with the updated metrics
+        :rtype: Dict
+        """
+        # Iterate over batches of data
+        for _, batch in track(sequence=enumerate(self.train_loader), total=len(self.train_loader)):  # type: ignore # pylint: disable=C0301
+            # Reset Metric counters
+            reset_metrics(self.metric_dict)
+            # Get Output from the model
+            results = self.inference(batch)
+            # Calculate the loss
+            loss = self.calculate_loss(self.loss_dict, results)
+            # Perform backpropagation and update Optimizer and Scheduler
+            self.optimizer.zero_grad()
+            loss.backward()
+            self.optimizer.step()
+            self.scheduler.step()
 
-    if args.use_aux:
-        metric_dict = {
-            "name": ["top1", "top2", "top3", "iou"],
-            "op": [
-                MultiLabelAcc(),
-                AccTopk(args.griding_num, 2),
-                AccTopk(args.griding_num, 3),
-                IoU(args.num_lanes + 1),
-            ],
-            "data_src": [
-                ("cls_out", "cls_label"),
-                ("cls_out", "cls_label"),
-                ("cls_out", "cls_label"),
-                ("seg_out", "seg_label"),
-            ],
-        }
-    else:
-        metric_dict = {
-            "name": ["top1", "top2", "top3"],
-            "op": [
-                MultiLabelAcc(),
-                AccTopk(args.griding_num, 2),
-                AccTopk(args.griding_num, 3),
-            ],
-            "data_src": [
-                ("cls_out", "cls_label"),
-                ("cls_out", "cls_label"),
-                ("cls_out", "cls_label"),
-            ],
-        }
+            # Get Argmax of the outputs
+            results = self.resolve_val_data(results)
 
-    return metric_dict
+        # Update and calculate metrics
+        update_metrics(self.metric_dict, results)
 
+        return self.metric_dict
 
-def structure_aware_train_fn(
-    model,
-    data_loader: Iterable,
-    loss_dict: dict,
-    optimizer,
-    scheduler,
-    metric_dict: dict,
-    use_aux: bool,
-) -> dict:
-    """
-    Trains the model for one epoch
+    def train(self) -> None:
+        """
+        Trains the model based on the specified parameters
+        """
+        # Put the model into training mode
+        # Let the work begin !!!
+        self.model.train()
 
-    :param model: An instance of the StructureAwareModel
-    :type model: torch.nn.Module
-    :param data_loader: A Pytorch Dataloader to be used for training
-    :type data_loader: Iterable
-    :param loss_dict: dictionary object for the various loss functions to be used
-    :type loss_dict: Dict
-    :param optimizer: The optimizer to be used for training
-    :param scheduler: The scheduler to be used for training
-    :param metric_dict: dictionary object for the various metrics to be used
-    :type metric_dict: Dict
-    :param use_aux: Whether to use the Auxiliary Head or not
-    :type use_aux: bool
-    :return: An updated metric dictionary
-    :rtype: Dict
-    """
-    model.train()
-    for _, batch in track(sequence=enumerate(data_loader), total=len(data_loader)):  # type: ignore # pylint: disable=C0321
-        reset_metrics(metric_dict)
-        results = structure_aware_model_inference(model, batch, use_aux)
+        for epoch in range(self.epochs):
 
-        loss = calculate_loss(loss_dict, results)
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-        scheduler.step()
+            # Get updated metric values after an epoch
+            updated_dict = self.train_fn()
 
-        results = resolve_val_data(results, use_aux)
+            # Print metrics
+            for me_name, me_op in zip(updated_dict["name"], updated_dict["op"]):
+                print(f"Epoch: {epoch} | metric/{me_name}: {me_op.get()}")
 
-    update_metrics(metric_dict, results)
+            # Save Model Checkpoints
+            if epoch % 10 == 0:
+                model_state_dict = self.model.state_dict()
+                state = {
+                    "model": model_state_dict,
+                    "optimizer": self.optimizer.state_dict(),
+                }
+                assert os.path.exists("checkpoints/"), os.makedirs("./checkpoints/")  # type: ignore # pylint: disable=C0321
+                torch.save(state, f"checkpoints/ep{epoch}.pth")
 
-    return metric_dict
+    def get_loss_dict(self):
+        """
+        Creates a custom dictionary for the various loss functions used in
+        the training phase
 
+        :return: custom dictionary containing various loss functions
+        :rtype: Dict
+        """
 
-def calculate_loss(loss_dict: dict, results: dict) -> torch.Tensor:
-    """
-    Calculates the various losses
+        if self.use_aux:
+            self.loss_dict = {
+                "name": ["cls_loss", "relation_loss", "aux_loss", "relation_dis"],
+                "op": [
+                    SoftmaxFocalLoss(2),
+                    LaneSimilarityLoss(),
+                    torch.nn.CrossEntropyLoss(),
+                    LaneShapeLoss(),
+                ],
+                "weight": [1.0, self.sim_loss_w, 1.0, self.shp_loss_w],
+                "data_src": [
+                    ("cls_out", "cls_label"),
+                    ("cls_out",),
+                    ("seg_out", "seg_label"),
+                    ("cls_out",),
+                ],
+            }
+        else:
+            self.loss_dict = {
+                "name": ["cls_loss", "relation_loss", "relation_dis"],
+                "op": [SoftmaxFocalLoss(2), LaneSimilarityLoss(), LaneShapeLoss()],
+                "weight": [1.0, self.sim_loss_w, self.shp_loss_w],
+                "data_src": [("cls_out", "cls_label"), ("cls_out",), ("cls_out",)],
+            }
 
-    :param loss_dict: custom dictionary for the various losses to be used
-    :type loss_dict: Dict
-    :param results: custom dictionary containing outputs from the model
-    :type results: Dict
-    :return: Cumulative Loss
-    :rtype: torch.Tensor
-    """
-    loss = 0
+    def get_metric_dict(self):
+        """
+        Creates a custom dictionary for the various metrics used in the training phase
 
-    for i in range(len(loss_dict["name"])):
+        :return: custom dictionary containing various loss metrics
+        :rtype: Dict
+        """
 
-        data_src = loss_dict["data_src"][i]
+        if self.use_aux:
+            self.metric_dict = {
+                "name": ["top1", "top2", "top3", "iou"],
+                "op": [
+                    MultiLabelAcc(),
+                    AccTopk(self.griding_num, 2),
+                    AccTopk(self.griding_num, 3),
+                    IoU(self.num_lanes + 1),
+                ],
+                "data_src": [
+                    ("cls_out", "cls_label"),
+                    ("cls_out", "cls_label"),
+                    ("cls_out", "cls_label"),
+                    ("seg_out", "seg_label"),
+                ],
+            }
+        else:
+            self.metric_dict = {
+                "name": ["top1", "top2", "top3"],
+                "op": [
+                    MultiLabelAcc(),
+                    AccTopk(self.griding_num, 2),
+                    AccTopk(self.griding_num, 3),
+                ],
+                "data_src": [
+                    ("cls_out", "cls_label"),
+                    ("cls_out", "cls_label"),
+                    ("cls_out", "cls_label"),
+                ],
+            }
 
-        datas = [results[src] for src in data_src]
+    # pylint: disable=R0201
+    def calculate_loss(self, loss_dict: Dict, results: Dict) -> torch.Tensor:
+        """
+        Calculates the various losses
 
-        loss_cur = loss_dict["op"][i](*datas)
+        :param loss_dict: custom dictionary for the various losses to be used
+        :type loss_dict: Dict
+        :param results: custom dictionary containing outputs from the model
+        :type results: Dict
+        :return: Cumulative Loss
+        :rtype: torch.Tensor
+        """
+        loss = 0
 
-        # weigh the loss by the provided weight
-        loss += loss_cur * loss_dict["weight"][i]
-    return loss  # type: ignore
+        for i in range(len(loss_dict["name"])):
 
+            data_src = loss_dict["data_src"][i]
 
-def resolve_val_data(results: dict, use_aux: bool) -> dict:
-    """
-    Returns the Argmax of the model outputs(s)
+            datas = [results[src] for src in data_src]
 
-    :param results: custom dictionary containing outputs from the model
-    :type results: Dict
-    :param use_aux: Whether to use the Auxiliary Head or not
-    :type use_aux: bool
-    :return: Validated Results
-    :rtype: Dict
-    """
-    results["cls_out"] = torch.argmax(results["cls_out"], dim=1)
-    if use_aux:
-        results["seg_out"] = torch.argmax(results["seg_out"], dim=1)
-    return results
+            loss_cur = loss_dict["op"][i](*datas)
+
+            # weigh the loss by the provided weight
+            loss += loss_cur * loss_dict["weight"][i]
+        return loss  # type: ignore
+
+    def resolve_val_data(self, results: Dict) -> Dict:
+        """
+        Returns the Argmax of the model outputs(s)
+
+        :param results: custom dictionary containing outputs from the model
+        :type results: Dict
+        :return: Validated Results
+        :rtype: Dict
+        """
+        results["cls_out"] = torch.argmax(results["cls_out"], dim=1)
+        if self.use_aux:
+            results["seg_out"] = torch.argmax(results["seg_out"], dim=1)
+        return results

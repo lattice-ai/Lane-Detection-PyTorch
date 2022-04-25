@@ -3,8 +3,13 @@
 from __future__ import annotations
 
 import argparse
+import os
+import random
 from typing import Any
 from typing import Union
+
+import numpy as np
+import torch
 
 tusimple_row_anchor = [
     64,
@@ -107,3 +112,20 @@ def find_start_pos(row_sample: list, start_line: int) -> int:
             right = mid
         if row_sample[mid] == start_line:
             return mid
+
+
+def seed_everything(seed: int = 42) -> None:
+    """
+    Courtesy of https://twitter.com/kastnerkyle/status/1473361479143460872?
+    """
+    torch.backends.cudnn.benchmark = True
+    torch.cuda.empty_cache()
+    random.seed(seed)
+    torch_seed = random.randint(1, 1000000)
+    torch_cuda_seed = random.randint(1, 1000000)
+    numpy_seed = random.randint(1, 1000000)
+    os_python_seed = random.randint(1, 1000000)
+    torch.manual_seed(torch_seed)
+    torch.cuda.manual_seed(torch_cuda_seed)
+    np.random.seed(numpy_seed)
+    os.environ["PYTHONHASHSEED"] = str(os_python_seed)
