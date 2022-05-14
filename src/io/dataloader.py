@@ -9,8 +9,7 @@ import torch
 from torchvision import transforms
 
 import src.io.transforms as CustomTransforms
-from src.io.dataset import TUSimpleDataset
-from src.io.dataset import TUSimpleTestDataset
+from src.io.dataset import TUSimpleDataset, TUSimpleTestDataset
 from src.utils import tusimple_row_anchor
 
 

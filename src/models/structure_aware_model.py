@@ -10,8 +10,7 @@ https://github.com/cfzd/Ultra-Fast-Lane-Detection/blob/master/model/model.py
 from __future__ import annotations
 
 import os
-from typing import Dict
-from typing import Tuple
+from typing import Dict, Tuple
 
 import numpy as np
 import torch
@@ -19,14 +18,8 @@ from rich.progress import track
 
 from src.io.dataloader import tusimple_train_dataloader
 from src.models.backbones import ResNet
-from src.nn.loss import LaneShapeLoss
-from src.nn.loss import LaneSimilarityLoss
-from src.nn.loss import SoftmaxFocalLoss
-from src.nn.metrics import AccTopk
-from src.nn.metrics import IoU
-from src.nn.metrics import MultiLabelAcc
-from src.nn.metrics import reset_metrics
-from src.nn.metrics import update_metrics
+from src.nn.loss import LaneShapeLoss, LaneSimilarityLoss, SoftmaxFocalLoss
+from src.nn.metrics import AccTopk, IoU, MultiLabelAcc, reset_metrics, update_metrics
 
 NUM_ROW_ANCHORS = 56
 

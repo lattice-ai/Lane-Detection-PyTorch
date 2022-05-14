@@ -3,16 +3,13 @@
 from __future__ import annotations
 
 import os
-from typing import Any
-from typing import Callable
-from typing import Tuple
+from typing import Any, Callable, Tuple
 
 import numpy as np
 import torch
 from PIL import Image
 
-from src.utils import find_start_pos
-from src.utils import tusimple_row_anchor
+from src.utils import find_start_pos, tusimple_row_anchor
 
 
 class TUSimpleTestDataset(torch.utils.data.Dataset):

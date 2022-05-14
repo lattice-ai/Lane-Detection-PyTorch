@@ -2,8 +2,7 @@
 """Basic Metrics and related utilities"""
 from __future__ import annotations
 
-from typing import Any
-from typing import Union
+from typing import Any, Union
 
 import numpy as np
 import torch

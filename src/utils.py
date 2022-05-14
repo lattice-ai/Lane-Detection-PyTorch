@@ -5,8 +5,7 @@ from __future__ import annotations
 import argparse
 import os
 import random
-from typing import Any
-from typing import Union
+from typing import Any, Union
 
 import numpy as np
 import torch
