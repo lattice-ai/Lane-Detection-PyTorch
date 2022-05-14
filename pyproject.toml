@@ -1,0 +1,34 @@
+[tool.isort]
+profile = "black"
+
+[tool.black]
+line-length = 88
+
+[tool.pylint.messages_control]
+disable = [
+    "no-member",
+    "too-many-arguments",
+    "too-few-public-methods",
+    "no-else-return",
+    "duplicate-code",
+    "too-many-branches",
+    "redefined-builtin",
+    "dangerous-default-value",
+]
+
+[tool.pylint.format]
+max-line-length = 88
+
+[[tool.mypy.overrides]]
+module = [
+    'PIL',
+    'torchvision'
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+	"ignore::UserWarning"
+]
