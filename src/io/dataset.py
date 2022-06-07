@@ -116,7 +116,6 @@ class TUSimpleDataset(torch.utils.data.Dataset):
     def __len__(self) -> int:
         return len(self.list)
 
-    # pylint: disable=R0201
     def _grid_pts(self, pts: np.ndarray, num_cols: int, width: int) -> np.ndarray:
         # pts : numlane,n,2
         num_lane, location, _ = pts.shape

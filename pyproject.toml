@@ -12,6 +12,7 @@ disable = [
     "no-else-return",
     "duplicate-code",
     "too-many-branches",
+    "no-self-use",
     "redefined-builtin",
     "dangerous-default-value",
 ]
