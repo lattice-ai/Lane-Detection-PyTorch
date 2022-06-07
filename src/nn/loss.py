@@ -46,7 +46,6 @@ class LaneSimilarityLoss(nn.Module):
     points in adjacent row anchors should be close to each other.
     """
 
-    # pylint: disable=R0201
     def forward(self, logits: torch.Tensor) -> torch.Tensor:
         """Calculates the Lane Similarity Loss
 
