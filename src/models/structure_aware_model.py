@@ -473,7 +473,6 @@ class StructureAwareTrainer:
                 ],
             }
 
-    # pylint: disable=R0201
     def calculate_loss(self, loss_dict: Dict, results: Dict) -> torch.Tensor:
         """
         Calculates the various losses
