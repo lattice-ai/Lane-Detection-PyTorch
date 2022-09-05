@@ -2,7 +2,7 @@ black==22.8.0
 mypy==0.971
 numpy==1.23.2
 opencv-python==4.6.0.66
-pathspec==0.10.0
+pathspec==0.10.1
 pre-commit==2.20.0
 pylint==2.15.0
 pytest==7.1.2
