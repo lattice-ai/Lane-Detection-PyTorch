@@ -10,4 +10,4 @@ rich==12.5.1
 scipy==1.9.1
 torch==1.12.1
 torchvision==0.13.1
-wandb==0.13.2
+wandb==0.13.3
