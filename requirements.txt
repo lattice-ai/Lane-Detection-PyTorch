@@ -1,6 +1,6 @@
 black==22.8.0
 mypy==0.971
-numpy==1.23.2
+numpy==1.23.3
 opencv-python==4.6.0.66
 pathspec==0.10.1
 pre-commit==2.20.0
