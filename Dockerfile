@@ -1,5 +1,5 @@
 # Use the CUDA image as base
-FROM nvidia/cuda:11.7.1-cudnn8-runtime-ubuntu20.04
+FROM nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu20.04
 
 # metainformation
 LABEL version="0.0.1"
