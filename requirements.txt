@@ -4,7 +4,7 @@ numpy==1.23.5
 opencv-python==4.6.0.66
 pathspec==0.10.2
 pre-commit==2.20.0
-pylint==2.15.6
+pylint==2.15.7
 pytest==7.2.0
 rich==12.6.0
 scipy==1.9.2
