@@ -18,12 +18,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 		gfortran \
 		libopenblas-dev \
 		python3 \
-		python3.9 \
+		python3.11 \
 		python3-pip \
-		python3.9-dev \
-		python3.9-venv \
+		python3.11-dev \
+		python3.11-venv \
 		&& apt-get clean && rm -rf /var/lib/apt/lists/*
 
 COPY . .
-RUN python3.9 -m pip install --no-cache-dir --upgrade pip setuptools wheel isort
-RUN python3.9 -m pip install --no-cache-dir -r requirements.txt
+RUN python3.11 -m pip install --no-cache-dir --upgrade pip setuptools wheel isort
+RUN python3.11 -m pip install --no-cache-dir -r requirements.txt
