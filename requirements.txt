@@ -1,13 +1,13 @@
 black
 mypy>=0.900
 numpy>=1.22.0
-opencv-python==4.7.0.68
-pathspec==0.10.3
+opencv-python
+pathspec
 pre-commit>=2.18.0
 pylint>=2.5.0
 pytest>=6.0.0
 rich==13.0.1
 scipy>=1.10.0
-torch==1.13.1
-torchvision==0.14.1
+torch
+torchvision
 wandb>=0.13.9
