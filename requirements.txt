@@ -6,7 +6,7 @@ pathspec
 pre-commit>=2.18.0
 pylint>=2.5.0
 pytest>=6.0.0
-rich==13.0.1
+rich==13.1.0
 scipy>=1.10.0
 torch
 torchvision
